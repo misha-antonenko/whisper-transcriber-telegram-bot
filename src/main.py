@@ -215,10 +215,6 @@ class TranscriberBot:
                 queue_length = self.task_queue.qsize()
 
                 logger.info(f"Task added to the queue. Current queue size: {queue_length}")
-
-                # Check if this is the only job and nothing is currently processing.
-                response_text = "⏳ Your request is next and is currently being processed." if queue_length == 1 else f"Your request has been added to the queue. There are {queue_length - 1} jobs ahead of yours."
-                await update.message.reply_text(response_text)
             else:
                 await update.message.reply_text("❌ No valid URL detected in your message. Please send a message that includes a valid URL. If you need help, type: /help")
 
@@ -250,7 +246,7 @@ class TranscriberBot:
 
                             video_info_message = ""  # Set a default empty value for video_info_message
                             ai_transcript_header = ""  # Set a default empty value for ai_transcript_header
-                            transcription_note = "📝🔊 <i>(transcribed audio)</i>\n\n"  # Define transcription note
+                            transcription_note = "<i>(transcribed audio)</i> "  # Define transcription note
 
                             if isinstance(task, str) and task.startswith('http'):
                                 logger.info(f"Processing URL: {task}")
@@ -262,20 +258,8 @@ class TranscriberBot:
                                 best_gpu = get_best_gpu()
                                 if best_gpu:
                                     device = f'cuda:{best_gpu.id}'
-                                    gpu_message = (
-                                        f"Using GPU {best_gpu.id}: {best_gpu.name}\n"
-                                        f"Free Memory: {best_gpu.memoryFree} MB\n"
-                                        f"Load: {best_gpu.load * 100:.1f}%"
-                                    )
                                 else:
                                     device = 'cpu'
-                                    gpu_message = "No GPU available, using CPU for transcription."
-
-                                logger.info(gpu_message)
-                                try:
-                                    await bot.send_message(chat_id=update.effective_chat.id, text=gpu_message)
-                                except Exception as e:
-                                    logger.error(f"Failed to send GPU message: {e}")
 
                                 audio_duration = get_audio_duration(task)
                                 if audio_duration is None:
@@ -288,26 +272,8 @@ class TranscriberBot:
                                     continue
 
                                 estimated_time = estimate_transcription_time(model, audio_duration)
-                                estimated_minutes = estimated_time / 60  # Convert to minutes for user-friendly display
 
-                                current_time = datetime.now()
-                                estimated_finish_time = current_time + timedelta(seconds=estimated_time)
-
-                                time_now_str = current_time.strftime('%Y-%m-%d %H:%M:%S')
-                                estimated_finish_time_str = estimated_finish_time.strftime('%Y-%m-%d %H:%M:%S')
-
-                                formatted_audio_duration = format_duration(audio_duration)
-                                language_setting = language if language else "autodetection"
-                                detailed_message = (
-                                    f"Audio file length:\n{formatted_audio_duration}\n\n"
-                                    f"Whisper model in use:\n{model}\n\n"
-                                    f"Model language set to:\n{language_setting}\n\n"
-                                    f"Estimated transcription time:\n{estimated_minutes:.1f} minutes.\n\n"
-                                    f"Time now:\n{time_now_str}\n\n"
-                                    f"Time when finished (estimate):\n{estimated_finish_time_str}\n\n"
-                                    "Transcribing audio..."
-                                )
-                                logger.info(detailed_message)
+                                detailed_message = f"ETA: {timedelta(seconds=estimated_time)}"
                                 try:
                                     await bot.send_message(chat_id=update.effective_chat.id, text=detailed_message)
                                 except Exception as e:
@@ -337,7 +303,7 @@ class TranscriberBot:
                                         with open(file_path, 'r') as f:
                                             content = f.read()
                                             if self.config.getboolean('TranscriptionSettings', 'includeheaderintranscription'):
-                                                ai_transcript_header = f"[ Transcript generated with: https://github.com/FlyingFathead/whisper-transcriber-telegram-bot/ | OpenAI Whisper model: `{model}` | Language: `{language}` ]"
+                                                ai_transcript_header = f"[ OpenAI Whisper model: `{model}` | Language: `{language}` ]"
                                                 header_content = f"{video_info_message}\n\n{ai_transcript_header}\n\n"
                                                 content = content[len(header_content):]
                                             # content = transcription_note + content  # Add transcription note
@@ -608,9 +574,6 @@ class TranscriberBot:
             logger.info(f"Converted voice message to WAV format: {wav_file_path}")
             
             await self.task_queue.put((wav_file_path, context.bot, update))
-            queue_length = self.task_queue.qsize()
-            response_text = "Your request is next and is currently being processed." if queue_length == 1 else f"Your request has been added to the queue. There are {queue_length - 1} jobs ahead of yours."
-            await update.message.reply_text(response_text)
         except subprocess.CalledProcessError as e:
             logger.error(f"Error converting voice message: {e}")
 
@@ -678,12 +641,6 @@ class TranscriberBot:
             # Queue the file for transcription
             await self.task_queue.put((file_path, context.bot, update))
             queue_length = self.task_queue.qsize()
-            response_text = (
-                "Your request is next and is currently being processed."
-                if queue_length == 1
-                else f"Your request has been added to the queue. There are {queue_length - 1} jobs ahead of yours."
-            )
-            await update.message.reply_text(response_text)
             logger.info(f"File queued for transcription. Queue length: {queue_length}")
         except Exception as e:
             logger.error(f"Exception in handle_audio_file: {e}")
@@ -736,12 +693,6 @@ class TranscriberBot:
                 # Queue the audio file for transcription
                 await self.task_queue.put((audio_file_path, context.bot, update))
                 queue_length = self.task_queue.qsize()
-                response_text = (
-                    "Your request is next and is currently being processed."
-                    if queue_length == 1
-                    else f"Your request has been added to the queue. There are {queue_length - 1} jobs ahead of yours."
-                )
-                await update.message.reply_text(response_text)
                 logger.info(f"Audio file queued for transcription. Queue length: {queue_length}")
 
             except subprocess.CalledProcessError as e:

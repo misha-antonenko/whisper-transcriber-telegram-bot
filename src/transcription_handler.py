@@ -5,6 +5,7 @@
 # https://github.com/FlyingFathead/whisper-transcriber-telegram-bot/
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+import shlex
 import GPUtil 
 import sys
 import time
@@ -494,10 +495,13 @@ async def transcribe_audio(bot, update, audio_path, output_dir, youtube_url, vid
     # transcription_command = ["whisper", audio_path, "--model", model, "--output_dir", output_dir, "--device", device]
 
     transcription_command = [
+        "yes", "|",
         "whisper", audio_path, 
         "--model", model, 
         "--output_dir", output_dir, 
-        "--device", device
+        "--device", device,
+        "--temperature", "0.1",
+        "--output_format", "txt",
     ]
 
     if language and language != "auto":
@@ -511,8 +515,9 @@ async def transcribe_audio(bot, update, audio_path, output_dir, youtube_url, vid
 
     try:
         # Start the subprocess and get stdout, stderr streams
-        process = await asyncio.create_subprocess_exec(
-            *transcription_command,
+        process = await asyncio.create_subprocess_shell(
+            ' '.join(transcription_command).encode(),
+            shell=True,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -545,7 +550,7 @@ async def transcribe_audio(bot, update, audio_path, output_dir, youtube_url, vid
         created_files = {}
         raw_content = ""
 
-        for fmt in ['txt', 'srt', 'vtt']:
+        for fmt in ['txt']:
             file_path = f"{output_dir}/{base_filename}.{fmt}"
             if os.path.exists(file_path) and os.path.getsize(file_path) > 0:
                 if fmt == 'txt':
@@ -568,7 +573,7 @@ async def transcribe_audio(bot, update, audio_path, output_dir, youtube_url, vid
         return created_files, raw_content
 
     except Exception as e:
-        logger.error(f"An error occurred during transcription: {e}")
+        logger.error(f"An error occurred during transcription:", exc_info=e)
         return {}, ""
 
 
@@ -888,7 +893,7 @@ async def process_url_message(message_text, bot, update, model, language):
             logging.info(completion_log_message)
 
     except Exception as e:
-        logger.error(f"An error occurred: {e}")
+        logger.error(f"An error occurred:", exc_info=e)
         await bot.send_message(chat_id=update.effective_chat.id, text="An error occurred during processing.")
 
 # create video info
